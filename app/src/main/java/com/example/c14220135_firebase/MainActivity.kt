@@ -7,6 +7,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.SimpleAdapter
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -17,10 +18,10 @@ import com.google.firebase.firestore.firestore
 
 val db = Firebase.firestore
 var DataProvinsi = ArrayList<dftarProvinsi>()
-lateinit var lvAdaper : ArrayAdapter<dftarProvinsi>
+lateinit var lvAdaper : SimpleAdapter
 lateinit var _etProvinsi : EditText
 lateinit var _etIbuKota : EditText
-
+var data: MutableList<Map<String, String>> = ArrayList()
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,13 +37,18 @@ class MainActivity : AppCompatActivity() {
         _etIbuKota = findViewById<EditText>(R.id.etIbuKotaProvinsi)
         val _btnSimpan = findViewById<Button>(R.id.btnSimpan)
         val _lvData = findViewById<ListView>(R.id.lvData)
-        lvAdaper = ArrayAdapter(
+        lvAdaper = SimpleAdapter(
             this,
-            android.R.layout.simple_list_item_1,
-            DataProvinsi
+            data,
+            android.R.layout.simple_list_item_2,
+            arrayOf<String>("Pro", "Ibu"),
+            intArrayOf(
+                android.R.id.text1,
+                android.R.id.text2,
+            )
         )
         _lvData.adapter = lvAdaper
-
+        readData(db)
         _btnSimpan.setOnClickListener {
             val provinsi = _etProvinsi.text.toString()
             val ibuKota = _etIbuKota.text.toString()
@@ -50,8 +56,25 @@ class MainActivity : AppCompatActivity() {
             if (provinsi.isNotEmpty() && ibuKota.isNotEmpty()) {
                 TambahData(db, provinsi, ibuKota)
                 readData(db)
-
             }
+        }
+
+        _lvData.setOnItemLongClickListener { parent, view, position, id ->
+            val docId = data[position]["DocId"]
+            if(docId != null){
+                db.collection("tbProvinsi")
+                    .document(docId)
+                    .delete()
+                    .addOnSuccessListener {
+                        Log.d("Firebase", "Berhasil dihapus")
+                        readData(db)
+                    }
+                    .addOnFailureListener {
+                        e -> Log.w("Firebase", e.message.toString())
+                    }
+                lvAdaper.notifyDataSetChanged()
+            }
+            true
         }
     }
 
@@ -71,22 +94,28 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    fun readData(db: FirebaseFirestore){
+    fun readData(db: FirebaseFirestore) {
         db.collection("tbProvinsi").get()
-            .addOnSuccessListener {
-                result ->
-                DataProvinsi.clear()
-                for(document in result){
-                    val readData = dftarProvinsi(
-                        document.data.get("provinsi").toString(),
-                        document.data.get("ibukota").toString(),
-                    )
-                    DataProvinsi.add(readData)
+            .addOnSuccessListener { result ->
+                data.clear()
+                for (document in result) {
+                    val provinsi = document.data["provinsi"].toString()
+                    val ibukota = document.data["ibukota"].toString()
+                    val docId = document.id
+
+                    val dt: MutableMap<String, String> = HashMap()
+                    dt["Pro"] = provinsi
+                    dt["Ibu"] = ibukota
+                    dt["DocId"] = docId
+                    data.add(dt)
                 }
+
+
                 lvAdaper.notifyDataSetChanged()
             }
-            .addOnFailureListener{
-                Log.d("Firebase", it.message.toString())
+            .addOnFailureListener { e ->
+                Log.d("Firebase", "Error reading data: ${e.message}")
             }
     }
+
 }
